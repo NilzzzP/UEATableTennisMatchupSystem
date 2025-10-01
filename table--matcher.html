@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UEA Table Tennis Matcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .toggle-checkbox:checked { right: 0; border-color: #ffd100; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #ffd100; }
+    </style>
+</head>
+<body class="bg-[#003c71] text-white">
+
+    <div class="max-w-7xl mx-auto p-4 bg-[#ffd100] text-[#003c71] rounded-lg mt-4 border-2 border-white">
+        <h2 class="font-bold text-lg">Important - How to Run This Application:</h2>
+        <p>This application has a local server (`server.py`) and this frontend. The "Preview" button will not work because it cannot connect to your local server.</p>
+        <ol class="list-decimal list-inside mt-2 font-semibold">
+            <li>Save both `server.py` and this HTML file in the same folder.</li>
+            <li>Run the server from your terminal: `python server.py`</li>
+            <li>Open your web browser and go to this exact address: <strong class="underline">http://127.0.0.1:5001</strong></li>
+        </ol>
+    </div>
+
+    <div id="app" class="max-w-7xl mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold text-[#ffd100]">UEA Table Tennis Matcher</h1>
+            <p class="text-lg text-gray-300 mt-2">ELO matchmaking for club nights.</p>
+        </header>
+        <div id="server-status" class="mb-4"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-1 bg-gray-800 bg-opacity-50 p-6 rounded-lg shadow-lg flex flex-col">
+                <div>
+                    <h2 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-3 text-[#ffd100]">Player Roster</h2>
+                    <form id="addPlayerForm" class="flex flex-col sm:flex-row gap-2 mb-6">
+                        <input type="text" id="playerName" placeholder="Enter new player name" class="flex-grow p-3 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-400" required>
+                        <button type="submit" class="bg-[#003c71] border border-[#ffd100] text-[#ffd100] font-semibold px-6 py-3 rounded-md hover:bg-[#ffd100] hover:text-[#003c71]">
+                            <i class="fas fa-plus mr-2"></i>Add
+                        </button>
+                    </form>
+                </div>
+                <div id="player-list-container" class="flex-grow">
+                    <div id="player-list" class="space-y-3"></div>
+                    <p id="no-players-message" class="text-center text-gray-400 py-6 hidden">No players added.</p>
+                    <div id="loading-players" class="text-center text-gray-400 py-6">
+                        <i class="fas fa-spinner fa-spin text-2xl text-[#ffd100]"></i>
+                        <p>Loading players...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 bg-gray-800 bg-opacity-50 p-6 rounded-lg shadow-lg">
+                <div id="session-setup">
+                    <h2 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-3 text-[#ffd100]">Session Setup</h2>
+                    <div class="flex flex-col sm:flex-row items-center gap-4 bg-gray-900 bg-opacity-40 p-4 rounded-lg">
+                        <div class="flex-grow">
+                            <label for="tableCount" class="block text-sm font-medium mb-1 text-gray-300">Available Tables</label>
+                            <input type="number" id="tableCount" value="2" min="1" class="w-full p-3 border border-gray-600 rounded-md bg-gray-700 text-white">
+                        </div>
+                        <button id="startSessionBtn" class="w-full sm:w-auto bg-[#ffd100] text-[#003c71] font-bold px-8 py-3 rounded-lg hover:bg-yellow-300 text-lg">
+                            <i class="fas fa-play mr-2"></i>Start Session
+                        </button>
+                    </div>
+                    <p id="generate-error" class="text-red-400 mt-2 text-center h-5"></p>
+                </div>
+
+                <div id="session-active" class="hidden">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-600 pb-3">
+                         <h2 class="text-2xl font-semibold text-[#ffd100]">Live Session</h2>
+                         <button id="endSessionBtn" class="bg-red-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-red-700">
+                            <i class="fas fa-stop mr-2"></i>End Session
+                        </button>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-semibold mb-3 text-green-400">Active Matches</h3>
+                        <div id="active-matches-list" class="space-y-4"></div>
+                        <p id="no-active-matches" class="text-center text-gray-400 py-4">No active matches.</p>
+                    </div>
+                    <div class="mt-8">
+                        <h3 class="text-xl font-semibold mb-3 text-blue-400">Waiting Queue</h3>
+                        <div id="waiting-players-list" class="space-y-2"></div>
+                        <p id="no-waiting-players" class="text-center text-gray-400 py-4">The queue is empty.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-xl text-center max-w-sm mx-auto">
+            <h3 class="text-xl font-bold mb-4 text-white">Confirm Deletion</h3>
+            <p id="delete-modal-text" class="text-gray-300 mb-6"></p>
+            <div class="flex justify-center gap-4">
+                <button id="cancel-delete-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-semibold px-6 py-2 rounded-md">Cancel</button>
+                <button id="confirm-delete-btn" class="bg-red-600 hover:bg-red-500 text-white font-semibold px-6 py-2 rounded-md">Delete</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:5001';
+
+        // --- Global State ---
+        let isSessionActive = false;
+        let playerIdToDelete = null;
+
+        // --- DOM Elements ---
+        const addPlayerForm = document.getElementById('addPlayerForm');
+        const playerNameInput = document.getElementById('playerName');
+        const playerList = document.getElementById('player-list');
+        const loadingPlayers = document.getElementById('loading-players');
+        const tableCountInput = document.getElementById('tableCount');
+        const startSessionBtn = document.getElementById('startSessionBtn');
+        const endSessionBtn = document.getElementById('endSessionBtn');
+        const generateError = document.getElementById('generate-error');
+        const sessionSetupDiv = document.getElementById('session-setup');
+        const sessionActiveDiv = document.getElementById('session-active');
+        const activeMatchesList = document.getElementById('active-matches-list');
+        const waitingPlayersList = document.getElementById('waiting-players-list');
+        const serverStatusDiv = document.getElementById('server-status');
+        const deleteModal = document.getElementById('delete-modal');
+        const deleteModalText = document.getElementById('delete-modal-text');
+        const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+
+        // --- API Functions ---
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error(`Fetch error for ${endpoint}:`, error);
+                let errorMessage = `<div class="bg-red-500 border border-red-700 text-white px-4 py-3 rounded-lg" role="alert">
+                    <strong class="font-bold">Server Connection Error!</strong>
+                    <span class="block sm:inline"> Could not connect to the local Python server at ${API_BASE_URL}.</span>`;
+                
+                if (window.location.protocol === 'https:') {
+                    errorMessage += `<p class="mt-2 text-sm font-semibold"><strong>Possible Cause:</strong> You are likely running this in a secure (https) preview window. Secure pages cannot connect to insecure local servers. Please follow the instructions at the top of the page to run this application correctly.</p>`;
+                } else {
+                    errorMessage += `<ul class="list-disc list-inside mt-2 text-sm">
+                        <li>Is the Python server running in a terminal?</li>
+                        <li>Is the address in the terminal the same as above?</li>
+                        <li>Check for firewall or antivirus software that might be blocking the connection.</li>
+                    </ul>`;
+                }
+                
+                errorMessage += `</div>`;
+                serverStatusDiv.innerHTML = errorMessage;
+                throw error;
+            }
+        }
+
+        const loadPlayers = async () => {
+            try {
+                const players = await apiFetch('/api/players');
+                renderPlayerRoster(players);
+                loadingPlayers.classList.add('hidden');
+                serverStatusDiv.innerHTML = ''; // Clear error on success
+            } catch (e) { /* Error is handled in apiFetch */ }
+        };
+
+        const addPlayer = async (name) => {
+            await apiFetch('/api/players', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            playerNameInput.value = '';
+            loadPlayers();
+            if (isSessionActive) {
+                const sessionState = await apiFetch('/api/session');
+                renderSessionView(sessionState);
+            }
+        };
+
+        const toggleIsPlaying = async (id) => {
+            await apiFetch('/api/players/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            loadPlayers();
+            if (isSessionActive) {
+                const sessionState = await apiFetch('/api/session');
+                renderSessionView(sessionState);
+            }
+        };
+        
+        const deletePlayer = async (id) => {
+            await apiFetch(`/api/players/${id}`, { method: 'DELETE' });
+            loadPlayers();
+        };
+
+        const startSession = async () => {
+            try {
+                const tableCount = parseInt(tableCountInput.value, 10);
+                const sessionState = await apiFetch('/api/session/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tableCount })
+                });
+                isSessionActive = true;
+                sessionSetupDiv.classList.add('hidden');
+                sessionActiveDiv.classList.remove('hidden');
+                renderSessionView(sessionState);
+            } catch (error) {
+                generateError.textContent = 'Failed to start session. See console for details.';
+            }
+        };
+
+        const endSession = async () => {
+            await apiFetch('/api/session/end', { method: 'POST' });
+            isSessionActive = false;
+            sessionActiveDiv.classList.add('hidden');
+            sessionSetupDiv.classList.remove('hidden');
+        };
+
+        const recordResult = async (winnerId, loserId, winnerScore, loserScore) => {
+             const sessionState = await apiFetch('/api/session/record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ winnerId, loserId, winnerScore, loserScore })
+            });
+            renderSessionView(sessionState);
+            loadPlayers(); 
+        };
+
+        // --- Deletion Modal Logic ---
+        const confirmDelete = (id, name) => {
+            playerIdToDelete = id;
+            deleteModalText.textContent = `Are you sure you want to permanently delete ${name}? This action cannot be undone.`;
+            deleteModal.classList.remove('hidden');
+        };
+
+        // --- Rendering ---
+        const renderPlayerRoster = (players) => {
+            const sortedPlayers = [...players].sort((a, b) => b.elo - a.elo);
+            playerList.innerHTML = '';
+            document.getElementById('no-players-message').classList.toggle('hidden', sortedPlayers.length > 0);
+            
+            sortedPlayers.forEach(p => {
+                const playerDiv = document.createElement('div');
+                playerDiv.className = 'flex items-center justify-between bg-gray-700 bg-opacity-60 p-3 rounded-lg border border-gray-600';
+                playerDiv.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div>
+                            <span class="font-medium ${p.is_playing ? 'text-white' : 'text-gray-400 line-through'}">${p.name}</span>
+                            <span class="text-xs ml-2 text-gray-300">(W:${p.wins}/L:${p.losses})</span>
+                        </div>
+                        <span class="text-sm font-semibold py-1 px-2 rounded-full ${p.is_playing ? 'bg-yellow-200 text-yellow-800' : 'bg-gray-600 text-gray-300'}">${Math.round(p.elo)}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" ${p.is_playing ? 'checked' : ''} id="toggle-${p.id}" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                            <label for="toggle-${p.id}" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-500 cursor-pointer"></label>
+                        </div>
+                        <button class="delete-btn text-red-500 hover:text-red-400"><i class="fas fa-trash-alt"></i></button>
+                    </div>`;
+                
+                playerDiv.querySelector(`#toggle-${p.id}`).onchange = () => toggleIsPlaying(p.id);
+                playerDiv.querySelector('.delete-btn').onclick = () => confirmDelete(p.id, p.name);
+                playerList.appendChild(playerDiv);
+            });
+        };
+
+        const renderSessionView = (session) => {
+            activeMatchesList.innerHTML = '';
+            document.getElementById('no-active-matches').classList.toggle('hidden', session.activeMatches.length > 0);
+            session.activeMatches.forEach((match, index) => {
+                const { player1, player2 } = match;
+                if (!player1 || !player2) return;
+
+                const card = document.createElement('div');
+                card.className = 'bg-gray-900 bg-opacity-40 p-4 rounded-lg border border-green-500';
+                card.innerHTML = `
+                    <form class="score-form">
+                        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 flex-wrap">
+                            <div class="font-bold text-green-400">Table ${index + 1}</div>
+                            <div class="flex-grow text-center">
+                                <span class="font-semibold text-white">${player1.name}</span> <span class="text-gray-400">vs</span> <span class="font-semibold text-white">${player2.name}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="number" name="score1" class="w-16 p-2 text-center border rounded bg-gray-700 text-white border-gray-600" placeholder="P1" required min="0">
+                                <span class="text-gray-400">-</span>
+                                <input type="number" name="score2" class="w-16 p-2 text-center border rounded bg-gray-700 text-white border-gray-600" placeholder="P2" required min="0">
+                                <button type="submit" class="bg-[#ffd100] text-[#003c71] px-3 py-2 rounded hover:bg-yellow-300"><i class="fas fa-check"></i></button>
+                            </div>
+                        </div>
+                        <div class="validation-error text-red-400 text-xs text-center h-4 mt-1"></div>
+                    </form>`;
+                
+                card.querySelector('.score-form').onsubmit = (e) => {
+                    e.preventDefault();
+                    const score1 = parseInt(e.target.score1.value, 10);
+                    const score2 = parseInt(e.target.score2.value, 10);
+                    const errorDiv = e.target.querySelector('.validation-error');
+                    errorDiv.textContent = '';
+
+                    const winnerScore = Math.max(score1, score2);
+                    const loserScore = Math.min(score1, score2);
+
+                    if (winnerScore !== 2 || winnerScore === loserScore) {
+                        errorDiv.textContent = 'Invalid score. Must be a valid best-of-3 result (2-0 or 2-1).';
+                        return;
+                    }
+                    
+                    const winnerId = score1 > score2 ? player1.id : player2.id;
+                    const loserId = score1 > score2 ? player2.id : player1.id;
+                    recordResult(winnerId, loserId, winnerScore, loserScore);
+                };
+                activeMatchesList.appendChild(card);
+            });
+
+            waitingPlayersList.innerHTML = '';
+            document.getElementById('no-waiting-players').classList.toggle('hidden', session.waitingPlayers.length > 0);
+            session.waitingPlayers.forEach((player, index) => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center bg-gray-900 bg-opacity-40 p-3 rounded-md border border-blue-500';
+                item.innerHTML = `<div><span class="font-bold mr-2 text-blue-400">${index + 1}.</span><span class="text-white">${player.name}</span></div><span class="font-semibold text-gray-300">${Math.round(player.elo)}</span>`;
+                waitingPlayersList.appendChild(item);
+            });
+        };
+
+        // --- Event Listeners ---
+        addPlayerForm.addEventListener('submit', (e) => { e.preventDefault(); addPlayer(playerNameInput.value); });
+        startSessionBtn.addEventListener('click', startSession);
+        endSessionBtn.addEventListener('click', endSession);
+        document.addEventListener('DOMContentLoaded', loadPlayers);
+        
+        cancelDeleteBtn.addEventListener('click', () => {
+            deleteModal.classList.add('hidden');
+            playerIdToDelete = null;
+        });
+
+        confirmDeleteBtn.addEventListener('click', () => {
+            if (playerIdToDelete) {
+                deletePlayer(playerIdToDelete);
+            }
+            deleteModal.classList.add('hidden');
+            playerIdToDelete = null;
+        });
+
+    </script>
+</body>
+</html>
+
